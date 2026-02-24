@@ -699,7 +699,19 @@ func startAPIs(
 			instanceInterceptor.HandlerFuncWithError,
 			middleware.AuthorizationInterceptor(verifier, config.SystemAuthZ, config.InternalAuthZ).HandlerFuncWithError(schemas.HandlerPrefix)))
 
-	c, err := console.Start(config.Console, config.ExternalSecure, oidcServer.IssuerFromRequest, middleware.CallDurationHandler, instanceInterceptor.Handler, limitingAccessInterceptor, config.CustomerPortal)
+	c, err := console.Start(
+		config.Console,
+		config.ExternalSecure,
+		config.HTTP1HostHeader,
+		config.HTTP2HostHeader,
+		config.InstanceHostHeaders,
+		config.PublicHostHeaders,
+		oidcServer.IssuerFromRequest,
+		middleware.CallDurationHandler,
+		instanceInterceptor.Handler,
+		limitingAccessInterceptor,
+		config.CustomerPortal,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("unable to start management console: %w", err)
 	}

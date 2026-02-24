@@ -97,7 +97,16 @@ func (f *file) Stat() (_ fs.FileInfo, err error) {
 	return f, nil
 }
 
-func Start(config Config, externalSecure bool, issuer op.IssuerFromRequest, callDurationInterceptor, instanceHandler func(http.Handler) http.Handler, limitingAccessInterceptor *middleware.AccessInterceptor, customerPortal string) (http.Handler, error) {
+func Start(
+	config Config,
+	externalSecure bool,
+	http1HostHeader, http2HostHeader string,
+	instanceHostHeaders, publicHostHeaders []string,
+	issuer op.IssuerFromRequest,
+	callDurationInterceptor, instanceHandler func(http.Handler) http.Handler,
+	limitingAccessInterceptor *middleware.AccessInterceptor,
+	customerPortal string,
+) (http.Handler, error) {
 	fSys, err := fs.Sub(static, "static")
 	if err != nil {
 		return nil, err
@@ -111,7 +120,17 @@ func Start(config Config, externalSecure bool, issuer op.IssuerFromRequest, call
 	security := middleware.SecurityHeaders(csp(config.PostHog.URL), nil)
 
 	handler := mux.NewRouter()
-	handler.Use(security, limitingAccessInterceptor.WithoutLimiting().Handle)
+	handler.Use(
+		middleware.WithOrigin(
+			externalSecure,
+			http1HostHeader,
+			http2HostHeader,
+			instanceHostHeaders,
+			publicHostHeaders,
+		),
+		security,
+		limitingAccessInterceptor.WithoutLimiting().Handle,
+	)
 
 	env := handler.NewRoute().Path(envRequestPath).Subrouter()
 	env.Use(
@@ -122,8 +141,8 @@ func Start(config Config, externalSecure bool, issuer op.IssuerFromRequest, call
 		instanceHandler,
 	)
 	env.HandleFunc("", func(w http.ResponseWriter, r *http.Request) {
-		url := http_util.BuildOrigin(r.Host, externalSecure)
 		ctx := r.Context()
+		url := http_util.DomainContext(ctx).Origin()
 		instance := authz.GetInstance(ctx)
 		instanceMgmtURL, err := templateInstanceManagementURL(config.InstanceManagementURL, instance)
 		if err != nil {
